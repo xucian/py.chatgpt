@@ -1,4 +1,7 @@
-![alt text](img/logo.png)
+<p align="center">
+  <img src="img/logo.png" />
+</p>
+
 # Py ChatGPT
 Python app/module mimicking the official ChatGPT app via OpenAI's Completion API.\
 Clean and simple, no reverse engineering or hacks in your browser.

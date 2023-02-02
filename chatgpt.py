@@ -1,9 +1,5 @@
-"""
-Generate a script from questions
-
-"""
 import os
-from datetime import date
+from datetime import date, datetime
 
 import openai
 from dotenv import load_dotenv
@@ -14,7 +10,7 @@ import cai
 load_dotenv()  # take environment variables from .env.
 
 
-class ChatGptPrompt:
+class Prompt:
     def __init__(self, ai_prompt: str, approx_words: int | None, approx_max_words: int, creativity01: float,
                  stream_output: True):
         """
@@ -39,7 +35,7 @@ class ChatGptPrompt:
                f'{self.ai_prompt}'
 
 
-class ChatGptPromptResult:
+class PromptResult:
     def __init__(self, resp):
         self.resp = resp
 
@@ -51,13 +47,13 @@ class ChatGptGen:
     def __init__(self, user_hint: str):
         self.user_hint = user_hint
 
-    def gen(self, prompt: ChatGptPrompt) -> ChatGptPromptResult:
+    def gen(self, prompt: Prompt) -> PromptResult:
 
         openai.api_key = os.getenv("OPENAI_API_KEY")
         response = self.__request(prompt)
-        return ChatGptPromptResult(response)
+        return PromptResult(response)
 
-    def __request(self, prompt: ChatGptPrompt):
+    def __request(self, prompt: Prompt):
         response = openai.Completion.create(
             model=cai.OPEN_AI_COMPLETION_MODEL,
             prompt=self.__generate_para_prompt_text(prompt),
@@ -99,82 +95,94 @@ class ChatGptGen:
         return response
 
     # noinspection PyMethodMayBeStatic
-    def __generate_para_prompt_text(self, prompt: ChatGptPrompt):
+    def __generate_para_prompt_text(self, prompt: Prompt):
         if prompt.approx_words is None:
             return prompt.ai_prompt
 
         return f'Answer in about {prompt.approx_words} words: {prompt.ai_prompt}'
 
 
+class Prompter:
+    def __init__(self, gen: ChatGptGen):
+        self.gen = gen
+
+    def run(self):
+        ai_name = 'ChatGPT'
+        # ai_name = 'Cassandra'
+        intro = f"You are {ai_name}, a large language model trained by OpenAI. You answer as concisely as " \
+                f"possible for each response, unless otherwise specified or the number of words is specified. " \
+                f"If you are generating a list, do not have too many items. Keep the number of items short. " \
+                f"Knowledge cutoff: 2021-09, " \
+                f"Current date: {str(date.today())}"
+        # intro = f"Your name is {ai_name}."
+        intro = f"{intro}\n\n" \
+                f"Below is a past conversation between us. Please complete it:\n\n"
+
+        history = []
+
+        while True:
+            message = input('You: ')
+            if message == 'exit':
+                break
+
+            full_prompt = ''
+            full_prompt += intro
+            full_prompt += '\n'.join([
+                f'Me: {h["user"]}\n'
+                f'You: {h["ai"]}\n'  # extra line-break between Q:A pairs
+                for h in history
+            ])
+            full_prompt += f'Me: {message}\n'
+            full_prompt += f'You: \n'
+            history_tc = cai.convert_string_to_num_tokens(full_prompt)
+            response_approx_max_words = 500
+            response_approx_max_tokens = cai.convert_words_to_tokens(response_approx_max_words)
+            # TODO always add the first paras (instructions on who are we etc.), add the fact that there's some missing
+            #  info etc.
+            total_tokens = history_tc + response_approx_max_tokens
+            if total_tokens > cai.MAX_TOKENS_SAFE:
+                surplus_tokens = total_tokens - cai.MAX_TOKENS_SAFE
+                surplus_tokens_ratio = surplus_tokens / cai.MAX_TOKENS_SAFE
+                surplus_nchars = round(len(full_prompt) * surplus_tokens_ratio)
+
+                # TODO
+                conv_cut_explanation = f"[This part was removed]\n\n"
+
+                full_prompt = full_prompt[-surplus_nchars:]
+
+            p = Prompt(full_prompt, approx_words=None, approx_max_words=response_approx_max_words,
+                       creativity01=0.5, stream_output=True)
+
+            try:
+                result = self.gen.gen(p)
+            except Exception as e:
+                print(e)
+                print(f'[Sorry, that didn\'t work. Please try again:]')
+                continue
+
+            resp_text_so_far = ''
+            print(f'{ai_name}: ', end='')
+
+            try:
+                for part in result.resp:
+                    resp_text = part.choices[0].text
+                    resp_text_so_far += resp_text
+                    print(resp_text, end='')
+            except Exception as e:
+                print(e)
+                print(f'[Sorry, something interrupted the response. Please try again]')
+                continue
+
+            history.append({'user': message, 'ai': resp_text_so_far})
+            print('\n')
+
+
+def main():
+    user_hint = f'random user at {datetime.utcnow()}'
+    gen = ChatGptGen(user_hint)
+    p = Prompter(gen)
+    p.run()
+
+
 if __name__ == '__main__':
-
-    gen = ChatGptGen(user_hint='chatgpt_console_test')
-
-    ai_name = 'ChatGPT'
-    # ai_name = 'Cassandra'
-    intro = f"You are {ai_name}, a large language model trained by OpenAI. You answer as concisely as " \
-            f"possible for each response, unless otherwise specified or the number of words is specified. " \
-            f"If you are generating a list, do not have too many items. Keep the number of items short. " \
-            f"Knowledge cutoff: 2021-09, " \
-            f"Current date: {str(date.today())}"
-    # intro = f"Your name is {ai_name}."
-    intro = f"{intro}\n\n" \
-            f"Below is a past conversation between us. Please complete it:\n\n"
-
-    history = []
-
-    while True:
-        message = input('You: ')
-        if message == 'exit':
-            break
-
-        full_prompt = ''
-        full_prompt += intro
-        full_prompt += '\n'.join([
-            f'Me: {h["user"]}\n'
-            f'You: {h["ai"]}\n'  # extra line-break between Q:A pairs
-            for h in history
-        ])
-        full_prompt += f'Me: {message}\n'
-        full_prompt += f'You: \n'
-        history_tc = cai.convert_string_to_num_tokens(full_prompt)
-        response_approx_max_words = 500
-        response_approx_max_tokens = cai.convert_words_to_tokens(response_approx_max_words)
-        # TODO always add the first paras (instructions on who are we etc.), add the fact that there's some missing
-        #  info etc.
-        total_tokens = history_tc + response_approx_max_tokens
-        if total_tokens > cai.MAX_TOKENS_SAFE:
-            surplus_tokens = total_tokens - cai.MAX_TOKENS_SAFE
-            surplus_tokens_ratio = surplus_tokens / cai.MAX_TOKENS_SAFE
-            surplus_nchars = round(len(full_prompt) * surplus_tokens_ratio)
-
-            # TODO
-            conv_cut_explanation = f"[This part was removed]\n\n"
-
-            full_prompt = full_prompt[-surplus_nchars:]
-
-        p = ChatGptPrompt(full_prompt, approx_words=None, approx_max_words=response_approx_max_words, creativity01=0.5,
-                          stream_output=True)
-
-        try:
-            result = gen.gen(p)
-        except Exception as e:
-            print(e)
-            print(f'[Sorry, that didn\'t work. Please try again:]')
-            continue
-
-        resp_text_so_far = ''
-        print(f'{ai_name}: ', end='')
-
-        try:
-            for part in result.resp:
-                resp_text = part.choices[0].text
-                resp_text_so_far += resp_text
-                print(resp_text, end='')
-        except Exception as e:
-            print(e)
-            print(f'[Sorry, something interrupted the response. Please try again]')
-            continue
-
-        history.append({'user': message, 'ai': resp_text_so_far})
-        print('\n')
+    main()

@@ -1,0 +1,13 @@
+__pycache__
+*.pyc
+/venv
+/.profiling
+/.cache
+/.secrets
+/speech
+/*.pdb
+/.env
+.idea/workspace.xml
+.idea/usage.statistics.xml
+.idea/shelf
+*.iml

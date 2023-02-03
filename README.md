@@ -12,6 +12,10 @@ Can be ran directly in your console or imported in your python project.
 Python 3.10 or up (could work with older versions as well)\
 https://www.python.org/downloads
 
+Check that python points to your new installation:\
+`which python` (Unix)\
+`where python` (Windows CMD)
+
 ## Install
 1. Open your shell in the current folder
 
@@ -36,4 +40,4 @@ Get yours: https://platform.openai.com/account/api-keys
 This is a work in progress. PRs are welcome! ☕
 
 ## Disclaimer
-This repo is not associated in any way with OpenAI and it's not an official app.\
+This repo is not associated in any way with OpenAI and it's not an official app.

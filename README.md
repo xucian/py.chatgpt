@@ -23,7 +23,7 @@ Check that python points to your new installation:\
 `python -m venv venv`
 
 3. Activate the venv:\
-`./venv/Scripts/activate` (Unix)\
+`. ./venv/Scripts/activate` (Unix)\
 `./venv/Scripts/activate.bat` (Windows)
 
 4. Install the requirements:\

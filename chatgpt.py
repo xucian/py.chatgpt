@@ -1,88 +1,48 @@
 import os
-from datetime import date, datetime
-
 import openai
-from dotenv import load_dotenv
-
-import cai
-
-
-load_dotenv()  # take environment variables from .env.
-
-
-class Prompt:
-    def __init__(self, ai_prompt: str, approx_words: int | None, approx_max_words: int, creativity01: float,
-                 stream_output: True):
-        """
-        :param ai_prompt:
-        :param approx_words:
-        :param approx_max_words:
-        :param creativity01: 0 means more exact answers, 1 means full creativity and novelty, also gives different
-            answers each time (it adds entropy)
-        """
-        self.ai_prompt = ai_prompt
-        self.approx_words = approx_words
-        self.approx_max_words = approx_max_words
-        self.creativity01 = creativity01
-        self.stream_output = stream_output
-
-    def __str__(self):
-        return f'[' \
-               f'approx_max_words={self.approx_max_words}, ' \
-               f'creativity01={self.creativity01}, ' \
-               f'stream_output={self.stream_output}, ' \
-               f']:\n' \
-               f'{self.ai_prompt}'
-
-
-class PromptResult:
-    def __init__(self, resp):
-        self.resp = resp
-
-    def __str__(self):
-        return self.resp.choices[0].text
-
+from datetime import datetime
+from typing import Optional
+from cai import convert_words_to_tokens, convert_string_to_num_tokens, MAX_TOKENS_SAFE, get_max_tokens_param
+from prompt import Prompt
+from prompt_result import PromptResult
 
 class ChatGptGen:
     def __init__(self, user_hint: str):
         self.user_hint = user_hint
 
     def gen(self, prompt: Prompt) -> PromptResult:
-
         openai.api_key = os.getenv("OPENAI_API_KEY")
         response = self.__request(prompt)
         return PromptResult(response)
 
     def __request(self, prompt: Prompt):
-        response = openai.Completion.create(
-            model=cai.OPEN_AI_COMPLETION_MODEL,
-            prompt=self.__generate_para_prompt_text(prompt),
+        # Convert the prompt to the messages format required by ChatCompletion
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": self.__generate_para_prompt_text(prompt)}
+        ]
+        
+        response = openai.ChatCompletion.create(
+            model=cai.OPEN_AI_CHAT_MODEL,
+            messages=messages,
             temperature=prompt.creativity01,
-
             # 1 by default, but making it explicit and safe-guarding for future API changes
             n=1,
-
             # 16 is default, 4096 is max (for new models)
             # max_tokens=16,
             max_tokens=cai.get_max_tokens_param(prompt.approx_max_words, prompt.ai_prompt),
-
             # [-2.0, 2.0]. 0.0 by default. Positive values make it go on less tangents in the conversation
             # A likely analogy: presence_penalty works on meaning while frequency_penalty on verbatim constructs
             # https://beta.openai.com/docs/api-reference/parameter-details
             presence_penalty=0.1,
-
             # [-2.0, 2.0]. 0.0 by default. See presence_penalty
             frequency_penalty=0.1,
-
             # False by default
             stream=prompt.stream_output,
-
             # 1 by default. Could increase accuracy, but linearly increases costs
             best_of=1,
-
             # uid of the end-user. optional
             user=self.user_hint,
-
             # Use the tokenizer tool at https://beta.openai.com/tokenizer?view=bpe to
             #   TODO there's an API on that page
             # Map example: {"50256": -1} to
@@ -182,7 +142,3 @@ def main():
     gen = ChatGptGen(user_hint)
     p = Prompter(gen)
     p.run()
-
-
-if __name__ == '__main__':
-    main()
